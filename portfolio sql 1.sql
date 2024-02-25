@@ -9511,3 +9511,60 @@ GROUP BY customer_id;
 -- Option 2: Data allocation based on the average balance over the last 30 days would require calculating a rolling average for each customer and then summing up those averages.
 -- Option 3: Real-time data updates would potentially need the maximum running balance as a proxy for data provisioning.
 
+
+-- 4-D. Extra Challenge:
+-- 	Data Bank wants to try another option which is a bit more difficult to implement - they want to calculate data growth using an 
+-- 	interest calculation, just like in a traditional savings account you might have with a bank.
+-- 	If the annual interest rate is set at 6% and the Data Bank team wants to reward its customers by increasing their data allocation
+--  based off the interest
+-- 	calculated on a daily basis at the end of each day, how much data would be required for this option on a monthly basis?
+
+-- 	Special notes:
+-- 	● Data Bank wants an initial calculation which does not allow for compounding interest, however they may also be interested in a daily
+--   	compounding interest calculation so you can try to perform this
+
+WITH adjusted_amount AS (
+    SELECT 
+        customer_id, 
+        MONTH(txn_date) AS month_number,
+        MONTHNAME(txn_date) AS month, -- Changed from DATENAME to MONTHNAME for MySQL
+        SUM(CASE 
+            WHEN txn_type = 'deposit' THEN txn_amount
+            ELSE -txn_amount
+        END) AS monthly_amount
+    FROM 
+       transaction_data
+    GROUP BY 
+        customer_id, MONTH(txn_date), MONTHNAME(txn_date) -- Adjusted for MySQL
+),
+interest AS (
+    SELECT 
+        customer_id, 
+        month_number,
+        month, 
+        monthly_amount,
+        ROUND(((monthly_amount * 6.0 * 1) / (100.0 * 12)), 2) AS interest -- No change needed here for MySQL
+    FROM 
+        adjusted_amount
+),
+total_earnings AS (
+    SELECT 
+        customer_id, 
+        month_number, 
+        month,
+        (monthly_amount + interest) as earnings
+    FROM  
+        interest
+)
+SELECT 
+    month_number,
+    month,
+    SUM(CASE WHEN earnings < 0 THEN 0 ELSE earnings END) AS allocation
+FROM 
+    total_earnings
+GROUP BY 
+    month_number, month
+ORDER BY 
+    month_number, month;
+
+
